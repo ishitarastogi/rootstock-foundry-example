@@ -2,9 +2,9 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import "../src/ERC20Token.sol";
+import "../src/TapToRoot.sol";
 
-contract DeployERC20Token is Script {
+contract DeployTapToRoot is Script {
     function setUp() public {}
 
     function run() public {
@@ -12,7 +12,7 @@ contract DeployERC20Token is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // Deployment with initial supply of 1,000 tokens
-        new ERC20Token(1000 * 10 ** 18);
+        new TapToRoot();
         vm.stopBroadcast();
     }
 }
