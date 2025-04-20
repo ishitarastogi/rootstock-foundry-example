@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
+import "./App.css";
 
-const CONTRACT_ADDRESS = "0xbb6ca48854b32d43f67f78670258ee3444ea3b31"; // replace
+const CONTRACT_ADDRESS = "0xbb6ca48854b32d43f67f78670258ee3444ea3b31";
 const ABI = [
   "function root() external",
   "function rootFriend(address friend) external",
@@ -11,81 +12,119 @@ const ABI = [
   "event FriendRooted(address indexed from, address indexed to, uint256 totalSentBySender, uint256 totalReceivedByFriend, uint256 globalTotal)",
 ];
 
-export default function TapToRootApp() {
-  const [provider, setProvider] = useState();
-  const [signer, setSigner] = useState();
-  const [contract, setContract] = useState();
-  const [userAddress, setUserAddress] = useState("");
-  const [myRoots, setMyRoots] = useState(0);
-  const [myReceived, setMyReceived] = useState(0);
-  const [friendAddress, setFriendAddress] = useState("");
+export default function App() {
+  const [user, setUser] = useState("");
+  const [contract, setContract] = useState(null);
+  const [roots, setRoots] = useState({ made: 0, received: 0 });
+  const [friend, setFriend] = useState("");
+  const [popupMsg, setPopupMsg] = useState("");
 
   // Connect wallet
-  async function connectWallet() {
-    const prov = new ethers.providers.Web3Provider(window.ethereum);
-    await prov.send("eth_requestAccounts", []);
-    const signer = prov.getSigner();
-    const address = await signer.getAddress();
-
-    setProvider(prov);
-    setSigner(signer);
-    setUserAddress(address);
+  async function connect() {
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    const signer = provider.getSigner();
+    const addr = await signer.getAddress();
+    setUser(addr);
     setContract(new ethers.Contract(CONTRACT_ADDRESS, ABI, signer));
   }
 
-  // Fetch user data
-  async function fetchData() {
-    if (!contract || !userAddress) return;
-    const made = await contract.getRootsMade(userAddress);
-    const received = await contract.getRootsReceived(userAddress);
-    setMyRoots(made.toNumber());
-    setMyReceived(received.toNumber());
+  // Fetch stats inside a proper useEffect
+  useEffect(() => {
+    if (!contract || !user) return;
+
+    // define and invoke async fetch
+    (async () => {
+      try {
+        const [made, received] = await Promise.all([
+          contract.getRootsMade(user),
+          contract.getRootsReceived(user),
+        ]);
+        setRoots({
+          made: made.toNumber(),
+          received: received.toNumber(),
+        });
+      } catch (err) {
+        console.error("fetchStats failed", err);
+      }
+    })();
+  }, [contract, user]);
+
+  // show popup
+  function showPopup(text) {
+    setPopupMsg(text);
+    setTimeout(() => setPopupMsg(""), 2000);
   }
 
-  useEffect(() => {
-    fetchData();
-  }, [contract, userAddress]);
-
-  const tapRoot = async () => {
+  const doRoot = async () => {
     const tx = await contract.root();
     await tx.wait();
-    fetchData();
+    showPopup("You rooted 🌱");
+    // re-fetch
+    const made = await contract.getRootsMade(user);
+    const received = await contract.getRootsReceived(user);
+    setRoots({ made: made.toNumber(), received: received.toNumber() });
   };
 
-  const tapFriend = async () => {
-    if (!ethers.utils.isAddress(friendAddress)) {
-      alert("Invalid address");
-      return;
+  const doRootFriend = async () => {
+    if (!ethers.utils.isAddress(friend)) {
+      return showPopup("Invalid friend address");
     }
-    const tx = await contract.rootFriend(friendAddress);
+    const tx = await contract.rootFriend(friend);
     await tx.wait();
-    fetchData();
+    showPopup("Friend rooted 👯");
+    // re-fetch
+    const made = await contract.getRootsMade(user);
+    const received = await contract.getRootsReceived(user);
+    setRoots({ made: made.toNumber(), received: received.toNumber() });
   };
 
   return (
-    <div style={{ padding: "2rem", fontFamily: "monospace" }}>
-      <h2>🌱 TapToRoot on Rootstock</h2>
-      {!userAddress ? (
-        <button onClick={connectWallet}>Connect Wallet</button>
-      ) : (
-        <>
-          <p>👤 Your Address: {userAddress}</p>
-          <p>🌱 You’ve rooted {myRoots} times</p>
-          <p>🤝 You’ve been rooted by others {myReceived} times</p>
+    <div className="app-container">
+      <div className="card">
+        {popupMsg && <div className="popup">{popupMsg}</div>}
 
-          <button onClick={tapRoot}>🌱 Tap Root</button>
+        {!user ? (
+          <button onClick={connect} className="tap-button">
+            🔌
+          </button>
+        ) : (
+          <>
+            <div className="stats">
+              <div className="stat">
+                <div className="stat-value">{roots.made}</div>
+                <div className="stat-label">Your Roots</div>
+              </div>
+              <div className="stat">
+                <div className="stat-value">{roots.received}</div>
+                <div className="stat-label">Roots Received</div>
+              </div>
+            </div>
+            <h1 className="title">Tap (to) Root 🌱</h1>
 
-          <div style={{ marginTop: "1rem" }}>
-            <input
-              placeholder="Friend address"
-              value={friendAddress}
-              onChange={(e) => setFriendAddress(e.target.value)}
-              style={{ width: "300px" }}
-            />
-            <button onClick={tapFriend}>👯 Tap Friend</button>
-          </div>
-        </>
-      )}
+            <button onClick={doRoot} className="tap-button">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/3239/3239326.png"
+                alt="Tap Root"
+                style={{ width: "40px", height: "40px" }}
+              />
+            </button>
+
+            <div className="input-group">
+              <input
+                type="text"
+                placeholder="Friend address"
+                value={friend}
+                onChange={(e) => setFriend(e.target.value)}
+                className="input"
+              />
+              <button onClick={doRootFriend} className="button-friend">
+                👯
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
